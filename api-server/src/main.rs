@@ -1,12 +1,29 @@
 mod api_models;
 mod config;
+mod indexer;
 use actix_web::{
     middleware::Logger, web, App, HttpRequest, HttpResponse, HttpServer, Responder,
 };
 
-
 async fn list_replays(_req: HttpRequest) -> impl Responder {
     HttpResponse::Ok().body("Hey there!")
+}
+
+async fn server_info(_req: HttpRequest) -> impl Responder {
+    let payload = api_models::ServerInfo {
+        server_version: format!("{}.{}.{}{}",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            env!("CARGO_PKG_VERSION_MINOR"),
+            env!("CARGO_PKG_VERSION_PATCH"),
+            option_env!("CARGO_PKG_VERSION_PRE").unwrap_or("")),
+        supported_api_versions: vec!["v1".to_owned()]
+    };
+    if let Ok(serialized_payload )= serde_json::to_string(&payload) {
+        return HttpResponse::Ok()
+            .content_type("application/json")
+            .body(serialized_payload)
+    };
+    HttpResponse::InternalServerError().body("Internal server error")
 }
 
 
@@ -57,17 +74,22 @@ async fn main() -> Result<(), config::StdErr> {
         let logger = Logger::default();
         App::new().wrap(logger)
             .service(
+                web::scope("/api").route("/server-info/", web::get().to(server_info))
+            )
+            .service(
                 web::scope("/api/v1")
                     .route("/replays/", web::get().to(list_replays))
             ).default_service(web::route().to(not_found_handler))
     })
     .workers(1)
     .bind(bind_address);
-    match service {
+    std::thread::spawn(|| indexer::index(config.path_to_watch));
+    let result = match service {
         Ok(s) => match s.run().await {
             Err(e) => Err(e.into()),
             _ => Ok(())
         },
         Err(e) => Err(e.into())
-    }
+    };
+    result
 }

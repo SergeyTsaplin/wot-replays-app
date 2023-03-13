@@ -2333,7 +2333,6 @@ dependencies = [
 [[package]]
 name = "wot-replays"
 version = "0.1.0"
-source = "git+https://github.com/SergeyTsaplin/wot-replays-rs?branch=main#121f98bec12065511bde1d92f23c6e61d866105d"
 dependencies = [
  "byteorder",
  "chrono",
